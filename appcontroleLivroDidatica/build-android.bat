@@ -1,0 +1,13 @@
+@echo off
+echo Limpando cache do projeto...
+rmdir /s /q node_modules
+del package-lock.json
+del yarn.lock
+echo Reinstalando dependencias...
+npm install --force
+echo Configurando para build...
+npx expo prebuild --clean
+echo Iniciando o build...
+eas build -p android --profile preview
+echo Build concluido!
+pause 

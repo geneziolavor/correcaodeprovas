@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Controle Didático",
+    "slug": "app-controle-livros-didaticos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#344955"
+      },
+      "package": "com.genezio.appcontrolelivrosdidaticos"
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "scheme": "app-controle-livros-didaticos",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "d8ce731a-98c1-49d3-a8a0-efe2fd76aeda"
+      }
+    },
+    "owner": "genezio",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d8ce731a-98c1-49d3-a8a0-efe2fd76aeda"
+    }
+  }
+}
