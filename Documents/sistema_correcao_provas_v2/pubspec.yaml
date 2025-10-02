@@ -1,0 +1,40 @@
+name: sistema_correcao_provas_v2
+description: Sistema de correção de provas desenvolvido em Flutter
+publish_to: "none" # se não for publicar no pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.6
+
+  # Banco de dados e autenticação
+  supabase_flutter: ^2.10.2
+
+  # Captura de imagens (câmera e galeria)
+  image_picker: ^0.8.9
+
+  # Gráficos
+  fl_chart: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
