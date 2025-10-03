@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,11 +23,10 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
   List<Map<String, dynamic>> gabarito = [];
 
   int? _alunoSelecionado;
-  File? _imagemCapturada;
+  XFile? _imagemCapturada;
   bool isLoading = true;
   bool isCorrigindo = false;
 
-  // Agora o Map usa id da pergunta
   Map<int, String> respostasAluno = {};
 
   @override
@@ -37,16 +37,12 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
 
   Future<void> _carregarDados() async {
     try {
-      await Future.wait([
-        _carregarAlunos(),
-        _carregarQuestoesEGabarito(),
-      ]);
+      await Future.wait([_carregarAlunos(), _carregarQuestoesEGabarito()]);
       setState(() => isLoading = false);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar dados: $e')),
-      );
       setState(() => isLoading = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
     }
   }
 
@@ -57,118 +53,60 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
         .eq('turma_id', widget.prova['turma_id'])
         .order('nome');
 
-    setState(() {
-      alunos = List<Map<String, dynamic>>.from(response);
-    });
+    alunos = List<Map<String, dynamic>>.from(response as List<dynamic>);
   }
 
   Future<void> _carregarQuestoesEGabarito() async {
-    try {
-      final questoesResponse = await supabase
-          .from('perguntas')
-          .select('*')
-          .eq('prova_id', widget.prova['id'])
-          .order('id'); // agora order por id
+    final questoesResponse = await supabase
+        .from('perguntas')
+        .select('*')
+        .eq('prova_id', widget.prova['id'])
+        .order('id');
 
-      setState(() {
-        questoes = List<Map<String, dynamic>>.from(questoesResponse);
-      });
+    questoes = List<Map<String, dynamic>>.from(questoesResponse as List<dynamic>);
+    gabarito = [];
 
-      if (questoes.isNotEmpty) {
-        List<Map<String, dynamic>> gabaritoTemp = [];
-
-        for (var questao in questoes) {
-          final gabResponse = await supabase
-              .from('respostas_oficiais')
-              .select('questao_id, resposta_correta')
-              .eq('questao_id', questao['id'])
-              .maybeSingle();
-
-          if (gabResponse != null) {
-            gabaritoTemp.add(Map<String, dynamic>.from(gabResponse));
-          }
-        }
-
-        setState(() {
-          gabarito = gabaritoTemp;
-        });
+    for (var questao in questoes) {
+      final gabResponse = await supabase
+          .from('respostas_oficiais')
+          .select('questao_id, resposta_correta')
+          .eq('questao_id', questao['id'])
+          .maybeSingle();
+      if (gabResponse != null) {
+        gabarito.add(Map<String, dynamic>.from(gabResponse as Map));
       }
-
-      respostasAluno.clear();
-      for (var questao in questoes) {
-        // Inicializa respostas usando id da pergunta
-        respostasAluno[questao['id']] = '';
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar questões: $e')),
-      );
     }
+
+    respostasAluno = {for (var q in questoes) q['id'] as int: ''};
   }
 
-  Future<void> _selecionarDaGaleria() async {
+  Future<void> _selecionarImagem(ImageSource source) async {
     if (_alunoSelecionado == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Selecione um aluno primeiro')),
-      );
+          const SnackBar(content: Text('Selecione um aluno primeiro')));
       return;
     }
 
     try {
       final XFile? image =
-          await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+          await _picker.pickImage(source: source, imageQuality: 85);
 
       if (image != null) {
-        setState(() {
-          _imagemCapturada = File(image.path);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Foto selecionada! Marque as respostas'),
-              backgroundColor: Colors.green),
-        );
+        setState(() => _imagemCapturada = image);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Foto carregada! Marque as respostas'),
+            backgroundColor: Colors.green));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao selecionar imagem: $e')),
-      );
-    }
-  }
-
-  Future<void> _capturarFoto() async {
-    if (_alunoSelecionado == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Selecione um aluno primeiro')),
-      );
-      return;
-    }
-
-    try {
-      final XFile? foto =
-          await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
-
-      if (foto != null) {
-        setState(() {
-          _imagemCapturada = File(foto.path);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Foto capturada! Marque as respostas'),
-              backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao capturar foto: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro: $e')));
     }
   }
 
   Future<void> _processarCorrecao() async {
     if (_alunoSelecionado == null || _imagemCapturada == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Selecione um aluno e capture a foto')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Selecione um aluno e capture a foto')));
       return;
     }
 
@@ -176,16 +114,12 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
 
     try {
       int acertos = 0;
-      int erros = 0;
 
       for (var questao in questoes) {
         final respostaAlunoAtual = respostasAluno[questao['id']] ?? '';
-
         final gabaritoQuestao = gabarito.firstWhere(
-          (g) => g['questao_id'] == questao['id'],
-          orElse: () => {'resposta_correta': ''}, // evita Null
-        );
-
+            (g) => g['questao_id'] == questao['id'],
+            orElse: () => {'resposta_correta': ''});
         final respostaCorreta = gabaritoQuestao['resposta_correta'] ?? '';
 
         await supabase.from('respostas_alunos').insert({
@@ -196,8 +130,6 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
 
         if (respostaAlunoAtual.toUpperCase() == respostaCorreta.toUpperCase()) {
           acertos++;
-        } else {
-          erros++;
         }
       }
 
@@ -206,29 +138,32 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
         'aluno_id': _alunoSelecionado,
         'total_questoes': questoes.length,
         'acertos': acertos,
-        'erros': erros,
+        'erros': questoes.length - acertos,
       }).select();
+
+      final correcaoId = correcaoResponse.isNotEmpty
+          ? (correcaoResponse[0]['id'] as int)
+          : null;
 
       final porcentagemAcerto =
           questoes.isNotEmpty ? (acertos / questoes.length * 100).round() : 0;
 
-      await supabase.from('resultados').insert({
-        'correcao_id': correcaoResponse.first['id'],
-        'porcentagem_acerto': porcentagemAcerto,
-        'media_turma': porcentagemAcerto,
-      });
+      if (correcaoId != null) {
+        await supabase.from('resultados').insert({
+          'correcao_id': correcaoId,
+          'porcentagem_acerto': porcentagemAcerto,
+          'media_turma': porcentagemAcerto,
+        });
+      }
 
-      setState(() => isCorrigindo = false);
-
-      final alunoNome = alunos.firstWhere(
-        (a) => a['id'] == _alunoSelecionado,
-        orElse: () => {'nome': 'Aluno'},
-      )['nome'];
+      final alunoNome = alunos
+          .firstWhere((a) => a['id'] == _alunoSelecionado)['nome']
+          .toString();
 
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Correção Finalizada!'),
+          title: const Text('Correção Finalizada!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,15 +177,16 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('OK'),
+              child: const Text('OK'),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(MaterialPageRoute(
-                    builder: (context) => ResultadosPage(prova: widget.prova)));
+                    builder: (context) =>
+                        ResultadosPage(prova: widget.prova)));
               },
-              child: Text('Ver Resultados'),
+              child: const Text('Ver Resultados'),
             ),
           ],
         ),
@@ -258,21 +194,18 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
 
       _limparFormulario();
     } catch (e) {
-      setState(() => isCorrigindo = false);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Erro: $e')));
+          .showSnackBar(SnackBar(content: Text('Erro ao corrigir: $e')));
+    } finally {
+      setState(() => isCorrigindo = false);
     }
   }
 
   void _limparFormulario() {
-    setState(() {
-      _alunoSelecionado = null;
-      _imagemCapturada = null;
-      respostasAluno.clear();
-      for (var questao in questoes) {
-        respostasAluno[questao['id']] = '';
-      }
-    });
+    _alunoSelecionado = null;
+    _imagemCapturada = null;
+    respostasAluno = {for (var q in questoes) q['id'] as int: ''};
+    setState(() {});
   }
 
   @override
@@ -284,222 +217,222 @@ class _CorrecaoPageState extends State<CorrecaoPage> {
         foregroundColor: Colors.white,
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Prova: ${widget.prova['titulo']}',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 18)),
-                          Text('Total de questões: ${questoes.length}'),
-                          Text('Alunos da turma: ${alunos.length}'),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('1. Selecione o Aluno',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16)),
-                          SizedBox(height: 8),
-                          DropdownButtonFormField<int>(
-                            value: _alunoSelecionado,
-                            decoration: InputDecoration(
-                                labelText: 'Aluno',
-                                border: OutlineInputBorder()),
-                            items: alunos
-                                .map((aluno) => DropdownMenuItem<int>(
-                                    value: aluno['id'],
-                                    child: Text(aluno['nome'])))
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _alunoSelecionado = value;
-                                _imagemCapturada = null;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('2. Capture a Prova',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16)),
-                          SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _alunoSelecionado == null
-                                      ? null
-                                      : _capturarFoto,
-                                  icon: Icon(Icons.camera_alt),
-                                  label: Text('Câmera'),
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue,
-                                      foregroundColor: Colors.white),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _alunoSelecionado == null
-                                      ? null
-                                      : _selecionarDaGaleria,
-                                  icon: Icon(Icons.photo_library),
-                                  label: Text('Galeria'),
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_imagemCapturada != null) ...[
-                            SizedBox(height: 16),
-                            Container(
-                              height: 200,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(8)),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(_imagemCapturada!,
-                                    fit: BoxFit.cover),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_imagemCapturada != null) ...[
-                    SizedBox(height: 16),
-                    Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('3. Marque as Respostas',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 16)),
-                            SizedBox(height: 16),
-                            ...questoes.map((questao) {
-                              final idQuestao = questao['id'];
-                              return Padding(
-                                padding: EdgeInsets.only(bottom: 16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Questão ${questao['id']}:',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    SizedBox(height: 8),
-                                    Row(
-                                      children: ['A', 'B', 'C', 'D', 'E']
-                                          .map((opcao) => Expanded(
-                                                child: Padding(
-                                                  padding:
-                                                      EdgeInsets.only(right: 4),
-                                                  child: ElevatedButton(
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        respostasAluno[idQuestao] =
-                                                            respostasAluno[
-                                                                        idQuestao] ==
-                                                                    opcao
-                                                                ? ''
-                                                                : opcao;
-                                                      });
-                                                    },
-                                                    style: ElevatedButton.styleFrom(
-                                                        backgroundColor:
-                                                            respostasAluno[
-                                                                        idQuestao] ==
-                                                                    opcao
-                                                                ? Colors.blue
-                                                                : Colors
-                                                                    .grey.shade300,
-                                                        foregroundColor:
-                                                            respostasAluno[
-                                                                        idQuestao] ==
-                                                                    opcao
-                                                                ? Colors.white
-                                                                : Colors.black),
-                                                    child: Text(opcao),
-                                                  ),
-                                                ),
-                                              ))
-                                          .toList(),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: isCorrigindo ? null : _processarCorrecao,
-                        icon: isCorrigindo
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))
-                            : Icon(Icons.check_circle),
-                        label: Text(isCorrigindo
-                            ? 'Corrigindo...'
-                            : 'Finalizar Correção'),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                            minimumSize: Size(double.infinity, 50)),
-                      ),
-                    ),
-                  ],
+                  _buildCardInfoProva(),
+                  const SizedBox(height: 16),
+                  _buildCardSelecionarAluno(),
+                  const SizedBox(height: 16),
+                  _buildCardCapturaProva(),
+                  if (_imagemCapturada != null) const SizedBox(height: 16),
+                  if (_imagemCapturada != null) _buildCardMarcarRespostas(),
+                  if (_imagemCapturada != null) const SizedBox(height: 16),
+                  if (_imagemCapturada != null) _buildBotaoFinalizarCorrecao(),
                 ],
               ),
             ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.all(16),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(16),
         child: ElevatedButton.icon(
           onPressed: () => Navigator.of(context).pop(),
-          icon: Icon(Icons.arrow_back),
-          label: Text('Voltar'),
+          icon: const Icon(Icons.arrow_back),
+          label: const Text('Voltar'),
           style: ElevatedButton.styleFrom(
               backgroundColor: Colors.grey,
               foregroundColor: Colors.white,
-              minimumSize: Size(double.infinity, 50)),
+              minimumSize: const Size(double.infinity, 50)),
         ),
+      ),
+    );
+  }
+
+  Card _buildCardInfoProva() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Prova: ${widget.prova['titulo']}',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Total de questões: ${questoes.length}'),
+            Text('Alunos da turma: ${alunos.length}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Card _buildCardSelecionarAluno() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('1. Selecione o Aluno',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              value: _alunoSelecionado,
+              decoration: const InputDecoration(
+                  labelText: 'Aluno', border: OutlineInputBorder()),
+              items: alunos
+                  .map((aluno) => DropdownMenuItem<int>(
+                      value: aluno['id'] as int,
+                      child: Text(aluno['nome'].toString())))
+                  .toList(),
+              onChanged: (value) => setState(() {
+                _alunoSelecionado = value;
+                _imagemCapturada = null;
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Card _buildCardCapturaProva() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('2. Capture a Prova',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _alunoSelecionado == null
+                        ? null
+                        : () => _selecionarImagem(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Câmera'),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _alunoSelecionado == null
+                        ? null
+                        : () => _selecionarImagem(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library),
+                    label: const Text('Galeria'),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            if (_imagemCapturada != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                height: 200,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8)),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: kIsWeb
+                      ? Image.network(_imagemCapturada!.path, fit: BoxFit.cover)
+                      : Image.file(File(_imagemCapturada!.path), fit: BoxFit.cover),
+                ),
+              ),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Card _buildCardMarcarRespostas() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('3. Marque as Respostas',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 16),
+            ...questoes.map((questao) {
+              final idQuestao = questao['id'] as int;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Questão $idQuestao:',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ['A', 'B', 'C', 'D', 'E']
+                          .map((opcao) => Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        respostasAluno[idQuestao] =
+                                            respostasAluno[idQuestao] == opcao
+                                                ? ''
+                                                : opcao;
+                                      });
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            respostasAluno[idQuestao] == opcao
+                                                ? Colors.blue
+                                                : Colors.grey.shade300,
+                                        foregroundColor:
+                                            respostasAluno[idQuestao] == opcao
+                                                ? Colors.white
+                                                : Colors.black),
+                                    child: Text(opcao),
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  SizedBox _buildBotaoFinalizarCorrecao() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: isCorrigindo ? null : _processarCorrecao,
+        icon: isCorrigindo
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.check_circle),
+        label: Text(isCorrigindo ? 'Corrigindo...' : 'Finalizar Correção'),
+        style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 50)),
       ),
     );
   }

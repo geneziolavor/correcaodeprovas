@@ -5,15 +5,15 @@ import 'package:fl_chart/fl_chart.dart';
 class ResultadosPage extends StatefulWidget {
   final Map<String, dynamic> prova;
 
-  ResultadosPage({required this.prova});
+  const ResultadosPage({Key? key, required this.prova}) : super(key: key);
 
   @override
   _ResultadosPageState createState() => _ResultadosPageState();
 }
 
 class _ResultadosPageState extends State<ResultadosPage> {
-  final _supabase = Supabase.instance.client;
-  
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   List<Map<String, dynamic>> correcoes = [];
   Map<String, dynamic> estatisticas = {};
   bool isLoading = true;
@@ -25,8 +25,9 @@ class _ResultadosPageState extends State<ResultadosPage> {
   }
 
   Future<void> _carregarResultados() async {
+    setState(() => isLoading = true);
     try {
-      final correcoesResponse = await _supabase
+      final response = await _supabase
           .from('correcoes')
           .select('''
             *,
@@ -37,16 +38,15 @@ class _ResultadosPageState extends State<ResultadosPage> {
           .order('created_at', ascending: false);
 
       setState(() {
-        correcoes = List<Map<String, dynamic>>.from(correcoesResponse);
+        correcoes = List<Map<String, dynamic>>.from(response);
       });
 
       _calcularEstatisticas();
-      setState(() => isLoading = false);
-      
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erro ao carregar resultados: $e')),
       );
+    } finally {
       setState(() => isLoading = false);
     }
   }
@@ -68,30 +68,28 @@ class _ResultadosPageState extends State<ResultadosPage> {
 
     int totalAcertos = 0;
     int totalErros = 0;
-    
     List<double> notas = [];
     int aprovados = 0;
-    
+
     for (var correcao in correcoes) {
       final acertos = correcao['acertos'] ?? 0;
       final erros = correcao['erros'] ?? 0;
-      final porcentagem = correcao['resultados']?.isNotEmpty == true
-          ? correcao['resultados'][0]['porcentagem_acerto'] ?? 0
-          : 0;
-      
+      final resultado = (correcao['resultados'] as List?)?.first;
+      final porcentagem = resultado != null ? resultado['porcentagem_acerto'] ?? 0 : 0;
+
       totalAcertos += acertos as int;
       totalErros += erros as int;
-      
-      final nota = porcentagem / 10.0;
+
+      final nota = (porcentagem as int) / 10.0;
       notas.add(nota);
-      
+
       if (nota >= 6.0) aprovados++;
     }
 
-    final mediaGeral = notas.isNotEmpty 
-        ? notas.reduce((a, b) => a + b) / notas.length 
+    final mediaGeral = notas.isNotEmpty
+        ? notas.reduce((a, b) => a + b) / notas.length
         : 0.0;
-    
+
     estatisticas = {
       'totalAlunos': correcoes.length,
       'mediaGeral': mediaGeral,
@@ -118,7 +116,7 @@ class _ResultadosPageState extends State<ResultadosPage> {
       );
     }
 
-    return Container(
+    return SizedBox(
       height: 250,
       child: PieChart(
         PieChartData(
@@ -130,10 +128,7 @@ class _ResultadosPageState extends State<ResultadosPage> {
               value: totalAcertos.toDouble(),
               title: '${((totalAcertos / total) * 100).round()}%',
               titleStyle: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               radius: 100,
             ),
             PieChartSectionData(
@@ -141,10 +136,7 @@ class _ResultadosPageState extends State<ResultadosPage> {
               value: totalErros.toDouble(),
               title: '${((totalErros / total) * 100).round()}%',
               titleStyle: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               radius: 100,
             ),
           ],
@@ -175,15 +167,44 @@ class _ResultadosPageState extends State<ResultadosPage> {
           ),
           Text(
             titulo,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             textAlign: TextAlign.center,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _excluirCorrecao(int correcaoId, String alunoNome) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Excluir Correção'),
+        content: Text('Deseja realmente excluir a correção de $alunoNome?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        await _supabase.from('correcoes').delete().eq('id', correcaoId);
+        _carregarResultados();
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Correção excluída com sucesso!')));
+      } catch (e) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Erro ao excluir correção: $e')));
+      }
+    }
   }
 
   @override
@@ -289,22 +310,14 @@ class _ResultadosPageState extends State<ResultadosPage> {
                             children: [
                               Row(
                                 children: [
-                                  Container(
-                                    width: 16,
-                                    height: 16,
-                                    color: Colors.green,
-                                  ),
+                                  Container(width: 16, height: 16, color: Colors.green),
                                   SizedBox(width: 8),
                                   Text('Acertos: ${estatisticas['totalAcertos']}'),
                                 ],
                               ),
                               Row(
                                 children: [
-                                  Container(
-                                    width: 16,
-                                    height: 16,
-                                    color: Colors.red,
-                                  ),
+                                  Container(width: 16, height: 16, color: Colors.red),
                                   SizedBox(width: 8),
                                   Text('Erros: ${estatisticas['totalErros']}'),
                                 ],
@@ -318,7 +331,7 @@ class _ResultadosPageState extends State<ResultadosPage> {
 
                   SizedBox(height: 16),
 
-                  // Lista de correções
+                  // Lista de correções individuais
                   Card(
                     child: Padding(
                       padding: EdgeInsets.all(16),
@@ -330,7 +343,6 @@ class _ResultadosPageState extends State<ResultadosPage> {
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                           ),
                           SizedBox(height: 16),
-                          
                           if (correcoes.isEmpty)
                             Center(
                               child: Text(
@@ -340,24 +352,19 @@ class _ResultadosPageState extends State<ResultadosPage> {
                             )
                           else
                             ...correcoes.map((correcao) {
-                              final aluno = correcao['alunos'];
-                              final resultado = correcao['resultados']?.isNotEmpty == true 
-                                  ? correcao['resultados'][0] 
-                                  : null;
-                              final porcentagem = resultado?['porcentagem_acerto'] ?? 0;
-                              final nota = porcentagem / 10.0;
+                              final aluno = correcao['alunos'] as Map<String, dynamic>?;
+                              final resultado = (correcao['resultados'] as List?)?.first;
+                              final porcentagem = resultado != null ? resultado['porcentagem_acerto'] ?? 0 : 0;
+                              final nota = (porcentagem as int) / 10.0;
                               final aprovado = nota >= 6.0;
-                              
+
                               return Card(
                                 color: aprovado ? Colors.green.shade50 : Colors.red.shade50,
                                 margin: EdgeInsets.only(bottom: 8),
                                 child: ListTile(
                                   leading: CircleAvatar(
                                     backgroundColor: aprovado ? Colors.green : Colors.red,
-                                    child: Icon(
-                                      aprovado ? Icons.check : Icons.close,
-                                      color: Colors.white,
-                                    ),
+                                    child: Icon(aprovado ? Icons.check : Icons.close, color: Colors.white),
                                   ),
                                   title: Text(
                                     aluno?['nome'] ?? 'Aluno não encontrado',
@@ -391,7 +398,6 @@ class _ResultadosPageState extends State<ResultadosPage> {
                 ],
               ),
             ),
-
       bottomNavigationBar: Container(
         padding: EdgeInsets.all(16),
         child: ElevatedButton.icon(
@@ -406,40 +412,5 @@ class _ResultadosPageState extends State<ResultadosPage> {
         ),
       ),
     );
-  }
-
-  Future<void> _excluirCorrecao(int correcaoId, String alunoNome) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Excluir Correção'),
-        content: Text('Deseja realmente excluir a correção de $alunoNome?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      try {
-        await _supabase.from('correcoes').delete().eq('id', correcaoId);
-        _carregarResultados();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Correção excluída com sucesso!')),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao excluir correção: $e')),
-        );
-      }
-    }
   }
 }
