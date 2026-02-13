@@ -1,0 +1,5 @@
+/* version 1.0.1 - build trigger */
+@import 'tailwindcss' source(none);
+@source '../**/*.{js,ts,jsx,tsx}';
+
+@plugin 'tailwindcss-animate';
